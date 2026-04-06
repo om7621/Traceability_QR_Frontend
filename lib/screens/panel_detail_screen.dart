@@ -159,7 +159,7 @@ class _PanelDetailScreenState extends State<PanelDetailScreen> {
             const Text("Basic Information", 
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue)),
             const Divider(),
-            _infoRow("Company Name", "NewEn"),
+            _infoRow("Company Name", "Newen Systems Pvt Ltd"),
             _infoRow("Project Name", _panel!.projectName ?? "N/A"),
             _infoRow("Panel Sr No", _panel!.panelSerial),
             _infoRow("Start Date", _panel!.startDate ?? "N/A"),
@@ -190,7 +190,6 @@ class _PanelDetailScreenState extends State<PanelDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _infoRow("Prepared By", _panel!.preparedBy ?? "N/A"),
-                _infoRow("Ref Document", _panel!.referenceDocument ?? "N/A"),
                 _infoRow("Remarks", _panel!.remarks ?? "N/A"),
               ],
             ),

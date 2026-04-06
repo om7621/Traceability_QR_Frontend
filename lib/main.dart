@@ -50,16 +50,19 @@ class _TraceabilityAppState extends State<TraceabilityApp> {
   }
 
   void _handleDeepLink(Uri uri) {
-    // Expected: .../panel.html?Panel Sr No=PNL123
-    // Handling potential space in query param name
-    String? panelId = uri.queryParameters['Panel Sr No'] ?? uri.queryParameters['id'];
+    // Expected: .../panel.html?id=87749272
+    // Also handling 'Panel Sr No' just in case
+    String? panelId = uri.queryParameters['id'] ?? uri.queryParameters['Panel Sr No'];
     
     if (panelId != null) {
-      _navigatorKey.currentState?.push(
-        MaterialPageRoute(
-          builder: (context) => PanelDetailScreen(panelId: panelId),
-        ),
-      );
+      // Use a brief delay or wait for the navigator to be ready
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute(
+            builder: (context) => PanelDetailScreen(panelId: panelId),
+          ),
+        );
+      });
     }
   }
 
@@ -72,6 +75,19 @@ class _TraceabilityAppState extends State<TraceabilityApp> {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
+      // Important for Web Deep Linking:
+      onGenerateRoute: (settings) {
+        if (settings.name != null && settings.name!.contains('/panel.html')) {
+          final uri = Uri.parse(settings.name!);
+          final panelId = uri.queryParameters['id'] ?? uri.queryParameters['Panel Sr No'];
+          if (panelId != null) {
+            return MaterialPageRoute(
+              builder: (context) => PanelDetailScreen(panelId: panelId),
+            );
+          }
+        }
+        return null;
+      },
       home: const HomeScreen(),
     );
   }
@@ -103,12 +119,18 @@ class HomeScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 30),
-              // In a real app, you might have a "Scan Now" button that opens an in-app scanner
-              // But per requirements, the app is launched via the system QR scanner (Deep Link)
               const Text(
                 "Waiting for QR Scan...",
                 style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
               ),
+              const SizedBox(height: 20),
+              // Added a manual button for testing on web if URL params fail
+              TextButton(
+                onPressed: () {
+                   Navigator.push(context, MaterialPageRoute(builder: (context) => const PanelDetailScreen(panelId: '87749272')));
+                },
+                child: const Text("Manual Test (ID: 87749272)"),
+              )
             ],
           ),
         ),

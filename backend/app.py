@@ -1,10 +1,20 @@
 import os
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Header
 from typing import Optional, List
 import pyodbc
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+# Enable CORS for your Flutter Web App
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://yellow-coast-0ea82d100.7.azurestaticapps.net", "http://localhost:8000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- Configuration ---
 # Updated with your actual Azure SQL details
@@ -14,28 +24,28 @@ DB_CONNECTION_STRING = (
     "Database=newen_traceability_db;"
     "Uid=omsingh;"
     "Pwd=Singhisblink7621;"
-    "Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+    "Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=30;"
 )
 
 # --- Models ---
-class Component(BaseModel):
-    id: int
-    section_name: str
-    component_name: str
+class ComponentModel(BaseModel):
+    sectionName: str
+    componentName: str
     make: str
-    serial_number: str
+    serialNumber: str
+    warranty: str = "Standard"
 
 class PanelResponse(BaseModel):
-    panel_serial: str
-    product_type: str
-    prepared_by: Optional[str]
-    start_date: Optional[str]
-    project_name: Optional[str]
-    reference_document: Optional[str]
-    verified_by: Optional[str]
-    remarks: Optional[str]
+    projectName: str
+    panel_sr_no: str
+    startDate: str
+    verifiedBy: str
+    companyName: str = "Newen Systems Pvt Ltd"
     status: str
-    components: Optional[List[Component]] = None
+    productType: str
+    preparedBy: Optional[str] = None
+    remarks: Optional[str] = None
+    components: Optional[List[ComponentModel]] = None
 
 # --- Helper Functions ---
 def get_db_connection():
@@ -47,6 +57,10 @@ def get_db_connection():
 
 # --- Endpoints ---
 
+@app.get("/")
+def read_root():
+    return {"message": "Newen Traceability API is Online"}
+
 @app.get("/get_panel_details", response_model=PanelResponse)
 def get_panel_details(id: str, authenticated: bool = False):
     conn = get_db_connection()
@@ -54,9 +68,8 @@ def get_panel_details(id: str, authenticated: bool = False):
 
     # 1. Fetch Panel Data from [dbo].[Panels]
     cursor.execute("""
-        SELECT panel_serial, product_type, prepared_by, start_date,
-               project_name, reference_document, verified_by, remarks, status
-        FROM [dbo].[Panels]
+        SELECT project_name, panel_serial, start_date, verified_by, product_type, prepared_by, remarks, status
+        FROM Panels
         WHERE panel_serial = ?
     """, id)
     row = cursor.fetchone()
@@ -66,33 +79,32 @@ def get_panel_details(id: str, authenticated: bool = False):
         raise HTTPException(status_code=404, detail="Panel not registered in system")
 
     response = PanelResponse(
-        panel_serial=row.panel_serial,
-        product_type=row.product_type,
-        prepared_by=row.prepared_by,
-        start_date=str(row.start_date) if row.start_date else None,
-        project_name=row.project_name,
-        reference_document=row.reference_document,
-        verified_by=row.verified_by,
-        remarks=row.remarks,
-        status=row.status
+        projectName=row.project_name or "N/A",
+        panel_sr_no=row.panel_serial,
+        startDate=str(row.start_date) if row.start_date else "N/A",
+        verifiedBy=row.verified_by or "N/A",
+        status=row.status or "Unknown",
+        productType=row.product_type or "N/A"
     )
 
-    # 2. Fetch Components Data from [dbo].[Components] if authenticated
+    # 2. Fetch Components Data if authenticated
     if authenticated:
+        response.preparedBy = row.prepared_by
+        response.remarks = row.remarks
+
         cursor.execute("""
-            SELECT id, section_name, component_name, make, serial_number
-            FROM [dbo].[Components]
+            SELECT section_name, component_name, make, serial_number
+            FROM Components
             WHERE panel_serial = ?
         """, id)
 
         components = []
         for c_row in cursor.fetchall():
-            components.append(Component(
-                id=c_row.id,
-                section_name=c_row.section_name,
-                component_name=c_row.component_name,
+            components.append(ComponentModel(
+                sectionName=c_row.section_name,
+                componentName=c_row.component_name,
                 make=c_row.make,
-                serial_number=c_row.serial_number
+                serialNumber=c_row.serial_number
             ))
         response.components = components
 
@@ -104,8 +116,6 @@ def raise_ticket(ticket: dict):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # Assuming a Tickets table exists or you want to create one
-        # For now, we'll just log it or you can specify the table structure
         cursor.execute(
             "INSERT INTO Tickets (panel_serial, description, contact_info, status) VALUES (?, ?, ?, 'Open')",
             (ticket['panelId'], ticket['description'], ticket['contactInfo'])
